@@ -125,7 +125,7 @@ public:
 		m_iDataSize = clSrcPacket.m_iDataSize;
 	}
 
-	virtual	~CNPacket()
+	virtual			~CNPacket()
 	{
 		Release();
 	}
@@ -137,7 +137,7 @@ public:
 	// Parameters: 없음.
 	// Return: (bool)true,false.
 	//////////////////////////////////////////////////////////////////////////
-	static bool	_ValueSizeCheck(void)
+	static bool		_ValueSizeCheck(void)
 	{
 		// 1 byte 변수 
 		if (eSBYTE != sizeof(char) || eBYTE != sizeof(unsigned char)) return false;
@@ -162,19 +162,22 @@ public:
 	// Parameters: (int)BufferSize.
 	// Return: 없음.
 	//////////////////////////////////////////////////////////////////////////
-	void	Initial(int iBufferSize = eBUFFER_DEFAULT)
+	void			Initial(int iBufferSize = eBUFFER_DEFAULT)
 	{
 		m_chpBuffer = new unsigned char[iBufferSize];
 
 		m_iBufferSize = iBufferSize;
 
-		m_chpDataFieldStart = m_chpBuffer;
-		m_chpDataFieldEnd = m_chpBuffer;
+		m_chpDataFieldStart = m_chpBuffer + 5;
+		m_chpDataFieldEnd = m_chpDataFieldStart;
 
-		m_chpReadPos = m_chpBuffer;
-		m_chpWritePos = m_chpBuffer;
+		m_chpReadPos = m_chpDataFieldStart;
+		m_chpWritePos = m_chpDataFieldStart;
+
+		m_bHeaderExist = false;
 
 		m_iDataSize = 0;
+
 	}
 
 
@@ -184,7 +187,7 @@ public:
 	// Parameters: 없음.
 	// Return: 없음.
 	//////////////////////////////////////////////////////////////////////////
-	void	Release(void)
+	void			Release(void)
 	{
 		delete[] m_chpBuffer;
 	}
@@ -197,12 +200,14 @@ public:
 	// Parameters: 없음.
 	// Return: 없음.
 	//////////////////////////////////////////////////////////////////////////
-	void	Clear(void)
+	void			Clear(void)
 	{
-		m_chpReadPos = m_chpBuffer;
-		m_chpWritePos = m_chpBuffer;
+		m_chpReadPos = m_chpDataFieldStart;
+		m_chpWritePos = m_chpDataFieldStart;
 
 		m_iDataSize = 0;
+
+		m_bHeaderExist = false;
 	}
 
 
@@ -213,7 +218,7 @@ public:
 	// Parameters: 없음.
 	// Return: (int)패킷 버퍼 사이즈 얻기.
 	//////////////////////////////////////////////////////////////////////////
-	int		GetBufferSize(void) { return m_iBufferSize; }
+	int				GetBufferSize(void) { return m_iBufferSize; }
 
 	//////////////////////////////////////////////////////////////////////////
 	// 현재 사용중인 사이즈 얻기.
@@ -226,12 +231,24 @@ public:
 
 
 	//////////////////////////////////////////////////////////////////////////
-	// 버퍼 포인터 얻기.
+	// 버퍼(데이터) 포인터 얻기.
 	//
 	// Parameters: 없음.
 	// Return: (unsigned char *)버퍼 포인터.
 	//////////////////////////////////////////////////////////////////////////
-	unsigned char *GetBufferPtr(void) const { return m_chpBuffer; }
+	unsigned char	*GetBufferPtr(void) const { return m_chpDataFieldStart; }
+
+
+
+	//////////////////////////////////////////////////////////////////////////
+	// 버퍼(헤더) 포인터 얻기.
+	//
+	// Parameters: 없음.
+	// Return: (unsigned char *)버퍼 포인터.
+	//////////////////////////////////////////////////////////////////////////
+	unsigned char	*GetBufferHeaderPtr(void) const { return m_chpReadPos; }
+
+
 
 	//////////////////////////////////////////////////////////////////////////
 	// 버퍼 Pos 이동. (음수이동은 안됨)
@@ -240,7 +257,7 @@ public:
 	// Parameters: (int) 이동 사이즈.
 	// Return: (int) 이동된 사이즈.
 	//////////////////////////////////////////////////////////////////////////
-	int		MoveWritePos(int iSize)
+	int				MoveWritePos(int iSize)
 	{
 		unsigned int iWriteIndex = m_chpWritePos - m_chpBuffer;
 
@@ -252,7 +269,7 @@ public:
 		return iSize;
 	}
 
-	int		MoveReadPos(int iSize)
+	int				MoveReadPos(int iSize)
 	{
 		unsigned int iReadIndex = m_chpWritePos - m_chpBuffer;
 
@@ -265,8 +282,62 @@ public:
 	}
 
 
+	//////////////////////////////////////////////////////////////////////////
+	// 헤더 셋팅(5Byte)
+	// 패킷 헤더 셋팅. 
+	//
+	// Parameters: (int) 이동 사이즈.
+	// Return: (int) 이동된 사이즈.
+	//////////////////////////////////////////////////////////////////////////
+	void			SetHeader(char *pHeader)
+	{
+		if (m_bHeaderExist)				return;
+
+		memcpy_s(m_chpBuffer, 5, pHeader, 5);
+
+		m_chpReadPos -= 5;
+		m_iDataSize += 5;
+	}
 
 
+	//////////////////////////////////////////////////////////////////////////
+	// 헤더 셋팅(일단 5Byte 이하로)
+	// 패킷 헤더 셋팅. 
+	//
+	// Parameters: (int) 이동 사이즈.
+	// Return: (int) 이동된 사이즈.
+	//////////////////////////////////////////////////////////////////////////
+	void SetCustomHeader(char *pHeader, int iCustomHeaderSize)
+	{
+		if (m_bHeaderExist || iCustomHeaderSize > 5)				return;
+
+		unsigned char * chpHeaderPos = m_chpBuffer + iCustomHeaderSize;
+
+		memcpy_s(chpHeaderPos, iCustomHeaderSize, pHeader, iCustomHeaderSize);
+
+		m_chpReadPos -= 2;
+		m_iDataSize += 2;
+	}
+
+
+	//////////////////////////////////////////////////////////////////////////
+	// 헤더 셋팅(2Byte, 에코 서버용)
+	// 패킷 헤더 셋팅. 
+	//
+	// Parameters: (int) 이동 사이즈.
+	// Return: (int) 이동된 사이즈.
+	//////////////////////////////////////////////////////////////////////////
+	void SetCustomShortHeader(unsigned short Header)
+	{
+		if (m_bHeaderExist)				return;
+
+		unsigned char * chpHeaderPos = m_chpBuffer + 3;
+
+		memcpy_s(chpHeaderPos, 2, &Header, 2);
+
+		m_chpReadPos -= 2;
+		m_iDataSize += 2;
+	}
 
 
 	/* ============================================================================= */
@@ -454,7 +525,7 @@ public:
 	// Parameters: (unsigned char *)Dest 포인터. (int)Size.
 	// Return: (int)복사한 사이즈.
 	//////////////////////////////////////////////////////////////////////////
-	int		GetData(unsigned char *bypDest, int iSize) const
+	int					GetData(unsigned char *bypDest, int iSize) const
 	{
 		int iCnt;
 
@@ -475,7 +546,7 @@ public:
 	// Parameters: (unsigned char *)Src 포인터. (int)SrcSize.
 	// Return: (int)복사한 사이즈.
 	//////////////////////////////////////////////////////////////////////////
-	int		PutData(unsigned char *bypSrc, int iSrcSize)
+	int					PutData(unsigned char *bypSrc, int iSrcSize)
 	{
 		int iCnt;
 
@@ -499,30 +570,34 @@ protected:
 	//------------------------------------------------------------
 	// 패킷버퍼 / 버퍼 사이즈.
 	//------------------------------------------------------------
-	unsigned char	*m_chpBufferExpansion;
+	unsigned char				*m_chpBufferExpansion;
 
-	unsigned char	*m_chpBuffer;
-	int				m_iBufferSize;
+	unsigned char				*m_chpBuffer;
+	int							m_iBufferSize;
 	//------------------------------------------------------------
 	// 패킷버퍼 시작 위치.	(본 클래스 에서는 사용하지 않지만, 확장성을 위해 사용)
 	//------------------------------------------------------------
-	unsigned char	*m_chpDataFieldStart;
-	unsigned char	*m_chpDataFieldEnd;
+	unsigned char				*m_chpDataFieldStart;
+	unsigned char				*m_chpDataFieldEnd;
 
 
 	//------------------------------------------------------------
 	// 버퍼의 읽을 위치, 넣을 위치.
 	//------------------------------------------------------------
-	mutable unsigned char	*m_chpReadPos;
-	mutable unsigned char	*m_chpWritePos;
+	mutable unsigned char		*m_chpReadPos;
+	mutable unsigned char		*m_chpWritePos;
 
 
 	//------------------------------------------------------------
 	// 현재 버퍼에 사용중인 사이즈.
 	//------------------------------------------------------------
-	mutable int		m_iDataSize;
+	mutable int					m_iDataSize;
 
 
+	//------------------------------------------------------------
+	// 헤더 셋팅 플래그
+	//------------------------------------------------------------
+	bool						m_bHeaderExist;
 };
 
 
